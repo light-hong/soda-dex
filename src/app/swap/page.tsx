@@ -174,6 +174,7 @@ export default function Swap() {
   })
   const directSwap = async () => {
     const amountInBigInt = parseUnits(sellAmount, sellToken.decimals)
+    const amountOutBigInt = parseUnits(buyAmount, buyToken.decimals)
     const zeroForOne =
       sellToken.address!.toLowerCase() < buyToken.address!.toLowerCase()
 
@@ -183,10 +184,13 @@ export default function Swap() {
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20)
 
+    const slippageBps = BigInt(Math.floor(parseFloat(slippage) * 100))
+    console.log('🚀 ~ directSwap ~ slippageBps:', slippageBps)
+
     const amountOutMinimum =
-      (amountInBigInt *
-        BigInt(Math.floor(10000 - parseFloat(slippage) * 100))) /
-      10000n
+      (amountOutBigInt * (10_000n - slippageBps)) / 10_000n
+
+    console.log('🚀 ~ directSwap ~ amountOutMinimum:', amountOutMinimum)
 
     const indexPath = swapRoute!.map((e) => e.index)
 

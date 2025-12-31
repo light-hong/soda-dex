@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
@@ -24,6 +24,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@uniswap/sdk-core": "^7.10.0",
     "@uniswap/v3-sdk": "^3.27.0",
+    "@wagmi/core": "^2.22.1",
     "bignumber.js": "^9.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
