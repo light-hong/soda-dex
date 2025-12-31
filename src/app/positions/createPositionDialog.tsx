@@ -1,0 +1,488 @@
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  Field,
+  FieldContent,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Controller, useForm, useWatch } from 'react-hook-form'
+import { toast } from 'sonner'
+import * as z from 'zod'
+import { createPositionFormSchema } from './positionSchema'
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from 'wagmi'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Slider } from '@/components/ui/slider'
+import { TickMath, tickToPrice } from '@uniswap/v3-sdk'
+import { Token } from '@uniswap/sdk-core'
+import { useTokenInfo } from '@/hooks/useTokenInfo'
+import { Spinner } from '@/components/ui/spinner'
+import { contractConfig } from '@/lib/contracts'
+import { useUnionPools } from '@/hooks/usePairs'
+import { erc20Abi, formatUnits, parseUnits } from 'viem'
+import { getDeadline } from '@/lib/utils'
+
+type CreatePositionFormProps = {
+  onClose?: () => void
+}
+
+type CreatePositionDialogProps = {
+  closeCallback?: () => void
+}
+
+type MintParams = {
+  token0: `0x${string}`
+  token1: `0x${string}`
+  index: number
+  recipient: `0x${string}`
+  deadline: bigint
+  amount0Desired: bigint
+  amount1Desired: bigint
+}
+const defaultParams: MintParams = {
+  token0: '' as `0x${string}`,
+  token1: '' as `0x${string}`,
+  index: 0,
+  recipient: '' as `0x${string}`,
+  deadline: BigInt(0),
+  amount0Desired: BigInt(0),
+  amount1Desired: BigInt(0),
+}
+function CreatePositionForm({ onClose }: CreatePositionFormProps) {
+  const { address } = useAccount()
+  const positionSchema = createPositionFormSchema()
+  const {
+    writeContract,
+    isPending,
+    data: hash,
+    error: writeError,
+  } = useWriteContract()
+
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({
+      hash,
+    })
+  const {
+    control,
+    handleSubmit,
+    getValues,
+    setValue,
+    formState: { errors },
+  } = useForm<z.infer<typeof positionSchema>>({
+    resolver: zodResolver(positionSchema),
+    defaultValues: {
+      pairId: '',
+      token0: '',
+      token1: '',
+      index: '',
+      amount0Desired: '',
+      amount1Desired: '',
+    },
+    mode: 'onChange',
+  })
+  const token0Value = useWatch({ control, name: 'token0' })
+  const token1Value = useWatch({ control, name: 'token1' })
+  const { pairOptions, poolOptions, tokenMap } = useUnionPools(
+    token0Value as `0x${string}`,
+    token1Value as `0x${string}`,
+  )
+  const [mintParams, setMintParams] = useState<MintParams>(defaultParams)
+  const {
+    writeContract: writeApproveToken0,
+    data: t0Hash,
+    isSuccess: approveT0Success,
+    isPending: approveT0Pending,
+  } = useWriteContract()
+  const { isLoading: approveT0Confirming, isSuccess: approveT0Confirmed } =
+    useWaitForTransactionReceipt({
+      hash: t0Hash,
+      query: {
+        enabled: approveT0Success && !!t0Hash,
+      },
+    })
+  const {
+    writeContract: writeApproveToken1,
+    data: t1Hash,
+    isSuccess: approveT1Success,
+    isPending: approveT1Pending,
+  } = useWriteContract()
+  const { isLoading: approveT1Confirming, isSuccess: approveT1Confirmed } =
+    useWaitForTransactionReceipt({
+      hash: t1Hash,
+      query: {
+        enabled: approveT1Success && !!t1Hash,
+      },
+    })
+
+  const {
+    writeContract: writePositionContract,
+    data: positionHash,
+    isSuccess: positionSuccess,
+    isPending: positionPending,
+  } = useWriteContract()
+  const { isLoading: positionConfirming, isError } =
+    useWaitForTransactionReceipt({
+      hash: positionHash,
+      query: {
+        enabled: positionSuccess && !!positionHash,
+      },
+    })
+
+  useEffect(() => {
+    const handleMint = () => {
+      writePositionContract(
+        {
+          ...contractConfig.positionManager,
+          functionName: 'mint',
+          args: [mintParams],
+        },
+        {
+          onSuccess(data) {
+            toast.success('Minting successful')
+            onClose?.()
+          },
+        },
+      )
+    }
+    const { amount0Desired, amount1Desired } = mintParams
+    if (
+      amount0Desired &&
+      amount1Desired &&
+      amount0Desired !== 0n &&
+      amount1Desired !== 0n
+    ) {
+      if (approveT0Confirmed && approveT1Confirmed) {
+        handleMint()
+      }
+    }
+    if (
+      amount0Desired &&
+      amount0Desired !== 0n &&
+      (!amount1Desired || amount1Desired === 0n)
+    ) {
+      if (approveT0Confirmed) {
+        handleMint()
+      }
+    }
+    if (
+      amount1Desired &&
+      amount1Desired !== 0n &&
+      (!amount0Desired || amount0Desired === 0n)
+    ) {
+      if (approveT1Confirmed) {
+        handleMint()
+      }
+    }
+  }, [approveT0Confirmed, mintParams, approveT1Confirmed])
+
+  const processing = useMemo(() => {
+    const { amount0Desired, amount1Desired } = mintParams
+    if (
+      amount0Desired &&
+      amount1Desired &&
+      amount0Desired !== 0n &&
+      amount1Desired !== 0n
+    ) {
+      return (
+        approveT0Pending ||
+        approveT1Pending ||
+        approveT0Confirming ||
+        approveT1Confirming ||
+        positionPending ||
+        positionConfirming
+      )
+    }
+    if (
+      amount0Desired &&
+      amount0Desired !== 0n &&
+      (!amount1Desired || amount1Desired === 0n)
+    ) {
+      return (
+        approveT0Pending ||
+        approveT0Confirming ||
+        positionPending ||
+        positionConfirming
+      )
+    }
+    if (
+      amount1Desired &&
+      amount1Desired !== 0n &&
+      (!amount0Desired || amount0Desired === 0n)
+    ) {
+      return (
+        approveT1Pending ||
+        approveT1Confirming ||
+        positionPending ||
+        positionConfirming
+      )
+    }
+    return false
+  }, [
+    approveT0Confirming,
+    approveT0Pending,
+    approveT1Confirming,
+    approveT1Pending,
+    mintParams,
+    positionConfirming,
+    positionPending,
+  ])
+
+  const onSubmit = async (data: z.infer<typeof positionSchema>) => {
+    const t0 = tokenMap.get(data.token0 as `0x${string}`)
+    const t1 = tokenMap.get(data.token1 as `0x${string}`)
+    const amount0Desired = parseUnits(data.amount0Desired!, t0!.decimals)
+    const maxT0 = parseUnits(data.amount0Desired! + 20, t0!.decimals)
+    const amount1Desired = parseUnits(data.amount1Desired!, t1!.decimals)
+    const maxT1 = parseUnits(data.amount1Desired! + 20, t1!.decimals)
+
+    const params = {
+      token0: data.token0 as `0x${string}`,
+      token1: data.token1 as `0x${string}`,
+      index: Number(data.index),
+      recipient: address as `0x${string}`,
+      deadline: getDeadline(),
+      amount0Desired,
+      amount1Desired,
+    }
+    setMintParams(params)
+    if (params.amount0Desired && params.amount0Desired !== 0n) {
+      await writeApproveToken0({
+        address: params.token0! as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [contractConfig.positionManager.address, BigInt(maxT0)],
+      })
+    }
+    if (params.amount1Desired && params.amount1Desired !== 0n) {
+      await writeApproveToken1({
+        address: params.token1! as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [contractConfig.positionManager.address, BigInt(maxT1)],
+      })
+    }
+    console.log('🚀 ~ onSubmit ~ params:', params)
+  }
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Create New Position</DialogTitle>
+      </DialogHeader>
+      <form id="form-rhf-position" onSubmit={handleSubmit(onSubmit)}>
+        <FieldGroup>
+          <Controller
+            name="pairId"
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="form-rhf-position-pairId">
+                  交易对
+                </FieldLabel>
+                <Select
+                  name={field.name}
+                  defaultValue={field.value}
+                  onValueChange={(pairId) => {
+                    field.onChange(pairId)
+
+                    const pair = pairOptions.find((p) => p.uuid === pairId)
+                    if (!pair) return
+
+                    setValue('token0', pair.token0, { shouldValidate: true })
+                    setValue('token1', pair.token1, { shouldValidate: true })
+                    setValue('index', '', { shouldValidate: false })
+                  }}
+                >
+                  <SelectTrigger
+                    id="form-rhf-position-pairId"
+                    aria-invalid={fieldState.invalid}
+                    className="h-12!"
+                  >
+                    <SelectValue placeholder="选择交易对" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pairOptions.map((pair) => (
+                      <SelectItem key={pair.uuid} value={pair.uuid}>
+                        {pair.pair}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="index"
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="form-rhf-position-index">
+                  交易池
+                </FieldLabel>
+                <Select
+                  name={field.name}
+                  defaultValue={field.value}
+                  onValueChange={(poolId) => {
+                    // field.onChange(pairId)
+
+                    const pool = poolOptions.find((p) => p.uuid === poolId)
+                    if (!pool) return
+                    setValue('index', `${pool.index}`, {
+                      shouldValidate: false,
+                    })
+                  }}
+                >
+                  <SelectTrigger
+                    id="form-rhf-position-index"
+                    aria-invalid={fieldState.invalid}
+                    className="h-12!"
+                  >
+                    <SelectValue
+                      placeholder={
+                        poolOptions.length ? '选择交易池' : '该交易对暂无数据'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {poolOptions.map((pool) => (
+                      <SelectItem key={pool.uuid} value={`${pool.uuid}`}>
+                        <span>
+                          Fee: {pool.feeStr} | Price Range: {pool.priceRange} |
+                          Current Price: {pool.currentPrice}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="amount0Desired"
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="form-rhf-position-amount0Desired">
+                  Token0数量
+                </FieldLabel>
+                <Input
+                  {...field}
+                  id="form-rhf-position-amount0Desired"
+                  aria-invalid={fieldState.invalid}
+                  type="number"
+                  autoComplete="off"
+                  className="h-12"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name="amount1Desired"
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="form-rhf-position-amount1Desired">
+                  Token1数量
+                </FieldLabel>
+                <Input
+                  {...field}
+                  id="form-rhf-position-amount1Desired"
+                  aria-invalid={fieldState.invalid}
+                  type="number"
+                  autoComplete="off"
+                  className="h-12"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+        </FieldGroup>
+      </form>
+      {isError && (
+        <div className="w-full flex items-center justify-center">
+          <div className="w-full flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            <span className="text-base">❌</span>
+            <span>创建失败了，请稍候再试</span>
+          </div>
+        </div>
+      )}
+      <DialogFooter>
+        <DialogClose asChild>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+        </DialogClose>
+        <Button disabled={processing} type="submit" form="form-rhf-position">
+          {processing ? (
+            <div className="inline-flex gap-1 items-center">
+              <Spinner />
+              Processing...
+            </div>
+          ) : (
+            'Submit'
+          )}
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}
+
+export function CreatePositionDialog() {
+  const { isConnected } = useAccount()
+  const [open, setOpen] = useState(false)
+  const onClose = () => {
+    setOpen(false)
+  }
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button disabled={!isConnected}>Create Position</Button>
+      </DialogTrigger>
+      {open && (
+        <DialogContent
+          onInteractOutside={(event) => event.preventDefault()}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          className="sm:max-w-120"
+        >
+          <CreatePositionForm onClose={onClose} />
+        </DialogContent>
+      )}
+    </Dialog>
+  )
+}

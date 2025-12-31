@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Providers } from './Providers'
+import { Header } from '@/components/header'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Toaster } from '@/components/ui/sonner'
 
 export const metadata: Metadata = {
   title: 'Create Next App',
@@ -12,8 +16,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <Providers>
+          <ScrollArea className="h-screen w-screen relative">
+            <Header />
+            {children}
+            <Toaster
+              position="top-center"
+              offset={{ top: '100px'}}
+            />
+          </ScrollArea>
+        </Providers>
+      </body>
     </html>
   )
 }
