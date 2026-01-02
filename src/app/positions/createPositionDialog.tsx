@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -11,7 +10,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   Field,
-  FieldContent,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -24,8 +22,6 @@ import * as z from 'zod'
 import { createPositionFormSchema } from './positionSchema'
 import {
   useAccount,
-  useChainId,
-  usePublicClient,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from 'wagmi'
@@ -36,24 +32,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Slider } from '@/components/ui/slider'
-import { TickMath, tickToPrice } from '@uniswap/v3-sdk'
-import { Token } from '@uniswap/sdk-core'
-import { useTokenInfo } from '@/hooks/useTokenInfo'
+import { useEffect, useMemo, useState } from 'react'
 import { Spinner } from '@/components/ui/spinner'
 import { contractConfig } from '@/lib/contracts'
-import { useUnionPools } from '@/hooks/usePairs'
-import { erc20Abi, formatUnits, parseUnits } from 'viem'
+import { usePools } from '@/hooks/usePools'
+import { erc20Abi, parseUnits } from 'viem'
 import { getDeadline } from '@/lib/utils'
 
 type CreatePositionFormProps = {
   onClose?: () => void
-}
-
-type CreatePositionDialogProps = {
-  closeCallback?: () => void
 }
 
 type MintParams = {
@@ -78,20 +65,8 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
   const { address } = useAccount()
   const positionSchema = createPositionFormSchema()
   const {
-    writeContract,
-    isPending,
-    data: hash,
-    error: writeError,
-  } = useWriteContract()
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({
-      hash,
-    })
-  const {
     control,
     handleSubmit,
-    getValues,
     setValue,
     formState: { errors },
   } = useForm<z.infer<typeof positionSchema>>({
@@ -108,7 +83,7 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
   })
   const token0Value = useWatch({ control, name: 'token0' })
   const token1Value = useWatch({ control, name: 'token1' })
-  const { pairOptions, poolOptions, tokenMap } = useUnionPools(
+  const { pairOptions, poolOptions, tokenMap } = usePools(
     token0Value as `0x${string}`,
     token1Value as `0x${string}`,
   )
@@ -146,29 +121,59 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
     isSuccess: positionSuccess,
     isPending: positionPending,
   } = useWriteContract()
-  const { isLoading: positionConfirming, isError } =
-    useWaitForTransactionReceipt({
-      hash: positionHash,
-      query: {
-        enabled: positionSuccess && !!positionHash,
-      },
-    })
+  const {
+    isLoading: positionConfirming,
+    isError,
+    isSuccess: positionConfirmed,
+    data: positionData,
+  } = useWaitForTransactionReceipt({
+    hash: positionHash,
+    query: {
+      enabled: positionSuccess && !!positionHash,
+    },
+  })
 
   useEffect(() => {
-    const handleMint = () => {
-      writePositionContract(
+    if (positionConfirming) {
+      toast.loading('Processing...', {
+        position: 'bottom-right',
+        id: 'create-position-toast',
+      })
+      return
+    }
+    if (positionConfirmed) {
+      toast.success(
+        <div>
+          交易哈希:
+          <a
+            href={`https://sepolia.etherscan.io/tx/${positionData.transactionHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            {`${positionData.transactionHash.slice(
+              0,
+              10,
+            )}...${positionData.transactionHash.slice(-10)}`}
+          </a>
+        </div>,
         {
-          ...contractConfig.positionManager,
-          functionName: 'mint',
-          args: [mintParams],
-        },
-        {
-          onSuccess(data) {
-            toast.success('Minting successful')
-            onClose?.()
-          },
+          position: 'bottom-right',
+          id: 'create-position-toast',
+          duration: 7000,
         },
       )
+      onClose?.()
+      return
+    }
+  }, [positionConfirmed, positionConfirming, positionData])
+  useEffect(() => {
+    const handleMint = () => {
+      writePositionContract({
+        ...contractConfig.positionManager,
+        functionName: 'mint',
+        args: [mintParams],
+      })
     }
     const { amount0Desired, amount1Desired } = mintParams
     if (
@@ -463,10 +468,14 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
   )
 }
 
-export function CreatePositionDialog() {
+type CreatePositionDialogProps = {
+  callBack?: () => void
+}
+export function CreatePositionDialog({ callBack }: CreatePositionDialogProps) {
   const { isConnected } = useAccount()
   const [open, setOpen] = useState(false)
   const onClose = () => {
+    callBack?.()
     setOpen(false)
   }
   return (

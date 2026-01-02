@@ -37,7 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Slider } from '@/components/ui/slider'
 import { TickMath, tickToPrice } from '@uniswap/v3-sdk'
 import { Token } from '@uniswap/sdk-core'
@@ -64,7 +64,7 @@ function CreatePoolForm({ onClose }: CreatePoolFormProps) {
     error: writeError,
   } = useWriteContract()
 
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+  const { data, isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({
       hash
     })
@@ -85,6 +85,37 @@ function CreatePoolForm({ onClose }: CreatePoolFormProps) {
     },
     mode: 'onBlur',
   })
+  useEffect(() => {
+    if (isConfirming) {
+      toast.loading('Processing...', { position: 'bottom-right', id: 'create-pool-toast' })
+      return
+    }
+    if (isConfirmed) {
+      toast.success(
+        <div>
+          交易哈希:
+          <a
+            href={`https://sepolia.etherscan.io/tx/${data.transactionHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            {`${data.transactionHash.slice(
+              0,
+              10,
+            )}...${data.transactionHash.slice(-10)}`}
+          </a>
+        </div>,
+        {
+          position: 'bottom-right',
+          id: 'create-pool-toast',
+          duration: 7000,
+        },
+      )
+      onClose?.()
+      return
+    }
+  }, [isConfirmed, data, isConfirming])
 
   const token0Value = useWatch({ control, name: 'token0' })
   const token1Value = useWatch({ control, name: 'token1' })
@@ -180,13 +211,7 @@ function CreatePoolForm({ onClose }: CreatePoolFormProps) {
               sqrtPriceX96: sqrtPriceX96,
             },
           ],
-        },
-        {
-          onSuccess() {
-            toast.success('Create Pool Success')
-            onClose?.()
-          },
-        },
+        }
       )
     } catch (error) {
       console.log('🚀 ~ onSubmit ~ error:', error)

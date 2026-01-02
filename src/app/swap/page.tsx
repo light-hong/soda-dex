@@ -19,7 +19,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { usePairs } from '@/hooks/usePairs'
+import { usePools } from '@/hooks/usePools'
 import { ArrowDownUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -53,7 +53,7 @@ type TokenMeta = {
 export default function Swap() {
   const { isConnected, address } = useAccount()
   const publicClient = usePublicClient()
-  const { tokenList, availablePools } = usePairs()
+  const { tokenList, availablePools } = usePools()
   const [sellToken, setSellToken] = useState<TokenMeta>({
     address: undefined,
     symbol: '',
@@ -172,6 +172,13 @@ export default function Swap() {
       enabled: swapSuccess && !!swapHash,
     },
   })
+  useEffect(() => {
+    if (swapConfirmed) {
+      refetchSellData()
+      setSellAmount('')
+      setBuyAmount('')
+    }
+  }, [swapConfirmed])
   const directSwap = async () => {
     const amountInBigInt = parseUnits(sellAmount, sellToken.decimals)
     const amountOutBigInt = parseUnits(buyAmount, buyToken.decimals)
@@ -224,14 +231,7 @@ export default function Swap() {
         functionName: 'exactInput',
         args: [params],
         value,
-      },
-      {
-        onSuccess(data) {
-          refetchSellData()
-          setSellAmount('')
-          setBuyAmount('')
-        },
-      },
+      }
     )
   }
   const handleSwap = () => {

@@ -11,8 +11,8 @@ import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  useReactTable,
   getPaginationRowModel,
+  useReactTable,
 } from '@tanstack/react-table'
 
 import {
@@ -27,13 +27,29 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
+  isLoading?: boolean
   pageSize?: number
   className?: string
   showPagination?: boolean
 }
+
+/** Skeleton 行 */
+function SkeletonRow({ colCount }: { colCount: number }) {
+  return (
+    <TableRow>
+      {Array.from({ length: colCount }).map((_, i) => (
+        <TableCell key={i}>
+          <div className="h-4 w-full animate-pulse rounded bg-muted" />
+        </TableCell>
+      ))}
+    </TableRow>
+  )
+}
+
 export function DataTable<TData, TValue>({
   columns,
   data,
+  isLoading = false,
   pageSize = 10,
   className,
   showPagination = true,
@@ -59,23 +75,28 @@ export function DataTable<TData, TValue>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  )
-                })}
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
+
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {/* Loading Skeleton */}
+            {isLoading ? (
+              Array.from({ length: pageSize }).map((_, i) => (
+                <SkeletonRow key={i} colCount={columns.length} />
+              ))
+            ) : table.getRowModel().rows.length ? (
+              /* Data Rows */
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -92,10 +113,11 @@ export function DataTable<TData, TValue>({
                 </TableRow>
               ))
             ) : (
+              /* Empty */
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-muted-foreground"
                 >
                   No results.
                 </TableCell>
@@ -104,15 +126,17 @@ export function DataTable<TData, TValue>({
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
       {showPagination && (
         <div className="flex items-center justify-end space-x-2 py-4">
           <Pagination>
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious
-                  onClick={() => table.previousPage()}
+                  onClick={() => !isLoading && table.previousPage()}
                   className={
-                    !table.getCanPreviousPage()
+                    !table.getCanPreviousPage() || isLoading
                       ? 'pointer-events-none opacity-50'
                       : ''
                   }
@@ -120,9 +144,9 @@ export function DataTable<TData, TValue>({
               </PaginationItem>
               <PaginationItem>
                 <PaginationNext
-                  onClick={() => table.nextPage()}
+                  onClick={() => !isLoading && table.nextPage()}
                   className={
-                    !table.getCanNextPage()
+                    !table.getCanNextPage() || isLoading
                       ? 'pointer-events-none opacity-50'
                       : ''
                   }
