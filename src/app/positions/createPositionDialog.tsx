@@ -22,6 +22,7 @@ import * as z from 'zod'
 import { createPositionFormSchema } from './positionSchema'
 import {
   useAccount,
+  useReadContracts,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from 'wagmi'
@@ -38,7 +39,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Spinner } from '@/components/ui/spinner'
 import { contractConfig } from '@/lib/contracts'
 import { usePools } from '@/hooks/usePools'
-import { erc20Abi, parseUnits } from 'viem'
+import { erc20Abi, formatUnits, parseUnits } from 'viem'
 import { getDeadline } from '@/lib/utils'
 
 type CreatePositionFormProps = {
@@ -90,6 +91,70 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
     token1Value as `0x${string}`,
   )
   const [mintParams, setMintParams] = useState<MintParams>(defaultParams)
+  const {
+    data: t0Data,
+    isLoading: t0Loading,
+    isSuccess: t0Success,
+    refetch: refetchT0Data,
+  } = useReadContracts({
+    contracts: [
+      {
+        address: token0Value as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'decimals',
+      },
+      {
+        address: token0Value as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [address as `0x${string}`],
+      },
+    ],
+    query: {
+      enabled: !!token0Value,
+    },
+  })
+  const t0Balance = useMemo(() => {
+    if (t0Success && t0Data) {
+      const decimals = t0Data[0].result as number
+      const balance = t0Data[1].result as bigint
+      const value = formatUnits(balance, decimals)
+      return value === '0' ? 0 : Number(value).toFixed(4)
+    }
+    return '0'
+  }, [t0Data, t0Success])
+  const {
+    data: t1Data,
+    isLoading: t1Loading,
+    isSuccess: t1Success,
+    refetch: refetchT1Data,
+  } = useReadContracts({
+    contracts: [
+      {
+        address: token1Value as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'decimals',
+      },
+      {
+        address: token1Value as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [address as `0x${string}`],
+      },
+    ],
+    query: {
+      enabled: !!token1Value,
+    },
+  })
+  const t1Balance = useMemo(() => {
+    if (t1Success && t1Data) {
+      const decimals = t1Data[0].result as number
+      const balance = t1Data[1].result as bigint
+      const value = formatUnits(balance, decimals)
+      return value === '0' ? 0 : Number(value).toFixed(4)
+    }
+    return '0'
+  }, [t1Data, t1Success])
   const {
     writeContract: writeApproveToken0,
     data: t0Hash,
@@ -403,7 +468,9 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="form-rhf-position-amount0Desired">
-                  Token0数量
+                  <div className="flex items-center">
+                    Token0数量( {t0Loading ? <Spinner /> : t0Balance} )
+                  </div>
                 </FieldLabel>
                 <Input
                   {...field}
@@ -425,7 +492,9 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="form-rhf-position-amount1Desired">
-                  Token1数量
+                  <div className="flex items-center">
+                    Token1数量( {t1Loading ? <Spinner /> : t1Balance} )
+                  </div>
                 </FieldLabel>
                 <Input
                   {...field}
