@@ -8,7 +8,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CircleCheckIcon, CircleHelpIcon, CircleIcon } from 'lucide-react'
 
 import { useIsMobile } from '@/hooks/use-mobile'
 import {
@@ -101,7 +100,17 @@ export function Header() {
           <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
           <span className="sr-only">Toggle theme</span>
         </Button>
-        <ConnectButton chainStatus="icon" />
+        <ConnectButton
+          chainStatus="icon"
+          accountStatus={{
+            smallScreen: 'avatar',
+            largeScreen: 'full',
+          }}
+          showBalance={{
+            smallScreen: false,
+            largeScreen: true,
+          }}
+        />
       </div>
     </header>
   )

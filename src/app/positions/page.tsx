@@ -128,7 +128,10 @@ export default function Positions() {
                       </InfoItem>
                       {/* 操作按钮 */}
                       <div className="flex flex-col gap-3">
-                        <PositionOperation position={position} refetch={refetchPositions} />
+                        <PositionOperation
+                          position={position}
+                          refetch={refetchPositions}
+                        />
                       </div>
                     </div>
                   </CardContent>
@@ -193,8 +196,8 @@ const PositionOperation = ({ position, refetch }: PositionOperationProps) => {
           duration: 7000,
         },
       )
-      refetch()
     }
+    refetch()
   }, [burnRes, burnConfirmed])
   const {
     writeContract: writeCollectContract,

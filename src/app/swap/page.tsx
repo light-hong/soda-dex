@@ -432,7 +432,7 @@ export default function Swap() {
                 <SelectTrigger className="w-50 h-11!">
                   <SelectValue placeholder="sell token" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectGroup>
                     <SelectLabel>sell token</SelectLabel>
                     {sellList.map((token) => (
@@ -481,7 +481,7 @@ export default function Swap() {
                 <SelectTrigger className="w-50 h-11!">
                   <SelectValue placeholder="buy token" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectGroup>
                     <SelectLabel>buy token</SelectLabel>
                     {buyList.map((token) => (

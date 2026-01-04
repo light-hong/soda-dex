@@ -28,7 +28,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -310,8 +312,7 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
                   交易对
                 </FieldLabel>
                 <Select
-                  name={field.name}
-                  defaultValue={field.value}
+                  value={field.value}
                   onValueChange={(pairId) => {
                     field.onChange(pairId)
 
@@ -330,12 +331,16 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
                   >
                     <SelectValue placeholder="选择交易对" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {pairOptions.map((pair) => (
-                      <SelectItem key={pair.uuid} value={pair.uuid}>
-                        {pair.pair}
-                      </SelectItem>
-                    ))}
+
+                  <SelectContent position="popper">
+                    <SelectGroup>
+                      <SelectLabel>select pair</SelectLabel>
+                      {pairOptions.map((pair) => (
+                        <SelectItem key={pair.uuid} value={pair.uuid}>
+                          {pair.pair}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 {fieldState.invalid && (
@@ -347,51 +352,50 @@ function CreatePositionForm({ onClose }: CreatePositionFormProps) {
           <Controller
             name="index"
             control={control}
-            render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="form-rhf-position-index">
-                  交易池
-                </FieldLabel>
-                <Select
-                  name={field.name}
-                  defaultValue={field.value}
-                  onValueChange={(poolId) => {
-                    // field.onChange(pairId)
+            render={({ field, fieldState }) => {
+              return (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-rhf-position-index">
+                    交易池
+                  </FieldLabel>
+                  <Select
+                    name={field.name}
+                    onValueChange={(poolId) => {
+                      // field.onChange(pairId)
 
-                    const pool = poolOptions.find((p) => p.uuid === poolId)
-                    if (!pool) return
-                    setValue('index', `${pool.index}`, {
-                      shouldValidate: false,
-                    })
-                  }}
-                >
-                  <SelectTrigger
-                    id="form-rhf-position-index"
-                    aria-invalid={fieldState.invalid}
-                    className="h-12!"
+                      const pool = poolOptions.find((p) => p.uuid === poolId)
+                      if (!pool) return
+                      setValue('index', `${pool.index}`)
+                    }}
                   >
-                    <SelectValue
-                      placeholder={
-                        poolOptions.length ? '选择交易池' : '该交易对暂无数据'
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {poolOptions.map((pool) => (
-                      <SelectItem key={pool.uuid} value={`${pool.uuid}`}>
-                        <span>
-                          Fee: {pool.feeStr} | Price Range: {pool.priceRange} |
-                          Current Price: {pool.currentPrice}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {fieldState.invalid && (
-                  <FieldError errors={[fieldState.error]} />
-                )}
-              </Field>
-            )}
+                    <SelectTrigger
+                      id="form-rhf-position-index"
+                      aria-invalid={fieldState.invalid}
+                      className="h-12!"
+                    >
+                      <SelectValue
+                        placeholder={
+                          poolOptions.length ? '选择交易池' : '该交易对暂无数据'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {poolOptions.map((pool) => (
+                        <SelectItem key={pool.uuid} value={`${pool.uuid}`}>
+                          <span>
+                            Fee: {pool.feeStr} | Price Range: {pool.priceRange}{' '}
+                            | Current Price: {pool.currentPrice}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )
+            }}
           />
           <Controller
             name="amount0Desired"
